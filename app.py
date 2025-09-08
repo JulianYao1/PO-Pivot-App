@@ -119,12 +119,6 @@ uploaded_file = st.file_uploader("Upload a PO CSV file", type="csv")
 
 if uploaded_file:
     st.success("File uploaded successfully! Click below to generate.")
-
-    # Read CSV into a DataFrame for preview
-    df_preview = pd.read_csv(uploaded_file, dtype=str)
-    st.subheader("📄 CSV Preview")
-    st.dataframe(df_preview.head(10))  # shows first 10 rows
-
     if st.button("Generate Pivot Excel"):
         excel_file = generate_pivot_excel(uploaded_file)
         st.download_button(
@@ -133,25 +127,3 @@ if uploaded_file:
             file_name="pivot_output.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-        # Optional: Show pivot table preview
-        st.subheader("📊 Pivot Table Preview")
-        # Re-generate pivot for display
-        df_preview['Vendor Style'] = pd.to_numeric(df_preview['UPC/EAN'].str.strip(), errors='coerce')
-        df_preview['KPR Style'] = df_preview['Vendor Style'].map(lambda x: style_map.get(x, {}).get('KPR', 'Unknown Style'))
-        df_preview["Mark's Style"] = df_preview['Vendor Style'].map(lambda x: style_map.get(x, {}).get('Marks', 'Unknown Style'))
-        df_preview['Qty per Store #'] = pd.to_numeric(df_preview['Qty per Store #'], errors='coerce').fillna(0)
-        df_preview['Size'] = df_preview['Size'].apply(parse_size)
-
-        pivot_preview = pd.pivot_table(
-            df_preview,
-            index=['Color', 'KPR Style', "Mark's Style"],
-            columns=['Size'],
-            values='Qty per Store #',
-            aggfunc='sum',
-            fill_value=0,
-            margins=True,
-            margins_name='Grand Total'
-        ).reset_index()
-
-        st.dataframe(pivot_preview)
