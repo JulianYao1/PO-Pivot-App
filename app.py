@@ -22,21 +22,49 @@ def parse_size(size_str):
 
 # --- Helper: Process CSV and return Excel file in memory ---
 def generate_pivot_excel(uploaded_file):
-    df = pd.read_csv(uploaded_file, dtype=str)
-    df.columns = df.columns.str.strip()
+    try:
+        # Read CSV
+        df = pd.read_csv(uploaded_file, dtype=str)
+        df.columns = df.columns.str.strip()
 
-    # Vendor Style
-    df['Vendor Style'] = pd.to_numeric(df['UPC/EAN'].str.strip(), errors='coerce')
-    df['KPR Style'] = df['Vendor Style'].map(lambda x: style_map.get(x, {}).get('KPR', 'Unknown Style'))
-    df["Mark's Style"] = df['Vendor Style'].map(lambda x: style_map.get(x, {}).get('Marks', 'Unknown Style'))
+        # Validate required columns
+        required_columns = ['UPC/EAN', 'PO Number', 'Ship Dates', 'Qty per Store #', 'Size', 'Color']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
 
-    # Qty
-    df['Qty per Store #'] = pd.to_numeric(df['Qty per Store #'], errors='coerce').fillna(0)
-    df['Size'] = df['Size'].apply(parse_size)
+        # Check if dataframe is empty
+        if df.empty:
+            raise ValueError("CSV file is empty")
 
-    # Extract metadata
-    po_number = df['PO Number'].dropna().iloc[0]
-    ship_date = df['Ship Dates'].dropna().iloc[0]
+        # Vendor Style
+        if 'UPC/EAN' not in df.columns:
+            raise ValueError("Missing 'UPC/EAN' column")
+        df['Vendor Style'] = pd.to_numeric(df['UPC/EAN'].str.strip(), errors='coerce')
+        df['KPR Style'] = df['Vendor Style'].map(lambda x: style_map.get(x, {}).get('KPR', 'Unknown Style'))
+        df["Mark's Style"] = df['Vendor Style'].map(lambda x: style_map.get(x, {}).get('Marks', 'Unknown Style'))
+
+        # Qty
+        df['Qty per Store #'] = pd.to_numeric(df['Qty per Store #'], errors='coerce').fillna(0)
+        df['Size'] = df['Size'].apply(parse_size)
+
+        # Extract metadata with validation
+        if 'PO Number' not in df.columns or df['PO Number'].dropna().empty:
+            raise ValueError("PO Number is missing or empty in the CSV file")
+        po_number = df['PO Number'].dropna().iloc[0]
+
+        if 'Ship Dates' not in df.columns or df['Ship Dates'].dropna().empty:
+            raise ValueError("Ship Dates is missing or empty in the CSV file")
+        ship_date = df['Ship Dates'].dropna().iloc[0]
+
+    except pd.errors.EmptyDataError:
+        raise ValueError("CSV file is empty or corrupted")
+    except pd.errors.ParserError as e:
+        raise ValueError(f"Failed to parse CSV file: {str(e)}")
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError(f"Error reading CSV file: {str(e)}")
 
     # Pivot
     pivot = pd.pivot_table(
@@ -121,11 +149,16 @@ if uploaded_files:
     st.success(f"{len(uploaded_files)} file(s) uploaded successfully! Click below to generate.")
     if st.button("Generate Pivot Excel"):
         for uploaded_file in uploaded_files:
-            excel_file, po_number = generate_pivot_excel(uploaded_file)
-            st.download_button(
-                label=f"⬇️ Download PO_{po_number}.xlsx",
-                data=excel_file,
-                file_name=f"PO_{po_number}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"download_{po_number}"
-            )
+            try:
+                excel_file, po_number = generate_pivot_excel(uploaded_file)
+                st.download_button(
+                    label=f"⬇️ Download PO_{po_number}.xlsx",
+                    data=excel_file,
+                    file_name=f"PO_{po_number}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"download_{po_number}"
+                )
+            except ValueError as e:
+                st.error(f"Error processing '{uploaded_file.name}': {str(e)}")
+            except Exception as e:
+                st.error(f"Unexpected error processing '{uploaded_file.name}': {str(e)}")
