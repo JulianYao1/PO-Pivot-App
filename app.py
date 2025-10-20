@@ -110,7 +110,7 @@ def generate_pivot_excel(uploaded_file):
     final_output = BytesIO()
     wb.save(final_output)
     final_output.seek(0)
-    return final_output
+    return final_output, po_number
 
 # --- Streamlit UI ---
 st.title("📊 PO Pivot Table Generator")
@@ -120,10 +120,10 @@ uploaded_file = st.file_uploader("Upload a PO CSV file", type="csv")
 if uploaded_file:
     st.success("File uploaded successfully! Click below to generate.")
     if st.button("Generate Pivot Excel"):
-        excel_file = generate_pivot_excel(uploaded_file)
+        excel_file, po_number = generate_pivot_excel(uploaded_file)
         st.download_button(
             label="⬇️ Download Pivot Excel",
             data=excel_file,
-            file_name="pivot_output.xlsx",
+            file_name=f"PO_{po_number}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
